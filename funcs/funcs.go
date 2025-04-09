@@ -40,7 +40,7 @@ func IsAlphaNumeric(value string, includes ...string) bool {
 func IsAlphaNumericWithPersian(value string, includes ...string) bool {
 	// Generate escaped regexp pattern
 	var builder strings.Builder
-	builder.WriteString(`^[a-zA-Z0-9\u0600-\u06FF\uFB8A\u067E\u0686\u0698\u06AF`)
+	builder.WriteString("^[a-zA-Z0-9 a-zA-Z0-9\u0600-\u06FF\uFB8A\u067E\u0686\u0698\u06AF")
 	for _, i := range includes {
 		builder.WriteString(regexp.QuoteMeta(i))
 	}
@@ -148,16 +148,28 @@ func IsValidIranianIBAN(iban string) bool {
 		return false
 	}
 
-	// Convert IBAN to a numeric format for MOD 97 check
-	ibanNumeric := iban[2:] + "1827" // IR -> 1827
+	// Move the first 4 characters to the end
+	rearranged := iban[4:] + iban[:4]
 
-	// Convert the numeric string to a big integer
-	bigInt, success := new(big.Int).SetString(ibanNumeric, 10)
-	if !success {
+	// Convert to numeric string
+	var numericIBAN strings.Builder
+	for _, r := range rearranged {
+		if r >= 'A' && r <= 'Z' {
+			numericIBAN.WriteString(strconv.Itoa(int(r - 'A' + 10)))
+		} else if r >= '0' && r <= '9' {
+			numericIBAN.WriteRune(r)
+		} else {
+			return false
+		}
+	}
+
+	// Convert to big integer
+	bigInt, ok := new(big.Int).SetString(numericIBAN.String(), 10)
+	if !ok {
 		return false
 	}
 
-	// Perform MOD 97 check
+	// Valid if mod 97 == 1
 	return new(big.Int).Mod(bigInt, big.NewInt(97)).Cmp(big.NewInt(1)) == 0
 }
 
@@ -233,7 +245,7 @@ func IsValidFileType(file *multipart.FileHeader, mimes ...string) (bool, error) 
 
 	// Compare detected MIME type with allowed MIME types
 	for _, mimeType := range mimes {
-		if strings.ToLower(mime.String()) == strings.ToLower(mimeType) {
+		if strings.EqualFold(mime.String(), mimeType) {
 			return true, nil
 		}
 	}
